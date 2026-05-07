@@ -1,9 +1,9 @@
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from routes.delivery import router as delivery_router
-from routes.fleet import router as fleet_router
-from routes.tracking import router as tracking_router
-from services.websocket_manager import manager
+from src.routes.delivery import router as delivery_router
+from src.routes.fleet import router as fleet_router
+from src.routes.tracking import router as tracking_router
+from src.services.websocket_manager import manager
 
 app = FastAPI(title="Drone Delivery System", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
