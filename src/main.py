@@ -1,27 +1,60 @@
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from src.routes.delivery import router as delivery_router
-from src.routes.fleet import router as fleet_router
-from src.routes.tracking import router as tracking_router
-from src.services.websocket_manager import manager
+from fastapi.responses import JSONResponse
 
-app = FastAPI(title="Drone Delivery System", version="1.0.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+from src.api.routes import router
+from src.core.config import get_settings
+from src.core.exceptions import AppError
 
-app.include_router(delivery_router, prefix="/api/deliveries", tags=["Deliveries"])
-app.include_router(fleet_router, prefix="/api/fleet", tags=["Fleet"])
-app.include_router(tracking_router, prefix="/api/tracking", tags=["Tracking"])
+settings = get_settings()
 
-@app.websocket("/ws/tracking/{drone_id}")
-async def tracking_ws(websocket: WebSocket, drone_id: str):
-    await manager.connect(websocket, drone_id)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            await manager.broadcast_position(drone_id, data)
-    except:
-        manager.disconnect(websocket, drone_id)
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.version,
+        docs_url="/docs",
+        redoc_url="/redoc",
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.exception_handler(AppError)
+    async def app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "success": False,
+                "error": {
+                    "code": exc.code,
+                    "message": exc.message,
+                    "details": exc.details,
+                },
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def generic_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": {
+                    "code": "INTERNAL_ERROR",
+                    "message": "An unexpected error occurred",
+                },
+            },
+        )
+
+    app.include_router(router)
+
+    return app
+
+
+app = create_app()
